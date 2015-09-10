@@ -5,13 +5,13 @@ local Loader = require 'Loader'
 
 local net = torch.load("net.t7")
 
-local loader = Loader.create("lm_bg_0_200.json", net.width, net.height)
+local loader = Loader.create("featured_200.json", "cache", net.width, net.height)
 local model = net.model
 
 local numTests = 100
 local corrects = 0
 for i = 1,numTests do
-  local input, target = loader:nextBatch()
+  local input, target = loader:get()
 
   local logProbs = model:forward(input)
   local probs = torch.exp(logProbs):squeeze()

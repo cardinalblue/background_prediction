@@ -4,11 +4,15 @@ require 'json'
 local Loader = {}
 Loader.__index = Loader
 
-function Loader.create(data, width, height)
+function Loader.create(data, cache, width, height)
   local self = {}
   setmetatable(self, Loader)
 
   self.data = json.load(data)
+  self.cache = cache
+  if self.cache:sub(#self.cache) ~= "/" then
+    self.cache = self.cache.."/"
+  end
   self.width = width
   self.height = height
 
@@ -103,21 +107,31 @@ function Loader.create(data, width, height)
   return self
 end
 
+function Loader:numClasses()
+  return #self.klasses + 1
+end
 
-function Loader:nextBatch()
+function Loader:get()
   local i = self.i
   self.i = self.i + 1
   if i > #self.data then
     self.i = 1
-    return self:nextBatch()
+    return self:get()
   end
 
-  -- load the image
-  local img = gm.Image(self.data[i]["url"])
-  img:size(self.width, self.height)
-  local imgT = img:toTensor()
-  imgT = imgT:transpose(1,3) -- make the color channel the first dimension
-  imgT = imgT:double()
+  -- load the image as a Tensor
+  local imgT
+  local fname = self.cache..self.data[i]["id"]..".t7"
+  local _, err = pcall(function() imgT = torch.load(fname) end)
+  if err ~= nil then
+    local img = gm.Image(self.data[i]["url"])
+    img:size(self.width, self.height)
+    imgT = img:toTensor()
+    imgT = imgT:transpose(1,3) -- make the color channel the first dimension
+    imgT = imgT:double()
+
+    torch.save(fname, imgT)
+  end
 
   -- Find the background
   local bg = self.klassesRev[self.data[i]["background_path"]]
@@ -128,7 +142,7 @@ function Loader:nextBatch()
   return imgT, bg
 end
 
---function Loader:nextBatch()
+--function Loader:get()
 --  local r = torch.uniform()
 --  if r > 0.5 then
 --    local input = torch.ones(3, self.width, self.height)
