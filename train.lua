@@ -8,7 +8,7 @@ local Loader = require 'Loader'
 
 local width = 100
 local height = 100
-local loader = Loader.create("featured_200.json", "cache", width, height)
+local loader = Loader.create("merged_feature_feed.json", "cache", width, height)
 
 local input = nn.Identity()()
 local conv1 = nn.SpatialConvolutionMap(nn.tables.random(3, 16, 1), 15, 15)(input)
