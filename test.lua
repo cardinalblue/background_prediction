@@ -1,19 +1,24 @@
-require 'nn'
+require 'cunn'
 require 'nngraph'
 
 local Loader = require 'Loader'
 
-local net = torch.load("net.t7")
-
-local loader = Loader.create("featured_200.json", "cache", net.width, net.height)
-local model = net.model
+local width = 128
+local height = 128
+local loader = Loader.create("featured816.json", "cache", width, height)
+local model = torch.load("net.t7")
+model:evaluate()
 
 local numTests = 100
 local corrects = 0
 for i = 1,numTests do
-  local input, target = loader:get()
+  local input = torch.zeros(1, 3, width, height)
+  local target
+  input[1], target = loader:get()
+  input = input:cuda()
 
-  local logProbs = model:forward(input)
+  local logProbsCUDA = model:forward(input)
+  logProbs = logProbsCUDA:float()
   local probs = torch.exp(logProbs):squeeze()
   local pred = torch.multinomial(probs, 1)[1]
   if pred == target then

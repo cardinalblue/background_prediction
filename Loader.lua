@@ -8,7 +8,11 @@ function Loader.create(data, cache, width, height)
   local self = {}
   setmetatable(self, Loader)
 
-  self.data = json.load(data)
+  if data == "" then
+    self.data = { {url = "http://pic-collage.com:80/api/assets?key=cfad601d38d4a673b84a95cbf5fc051b", background_path = "c_02.png", id = "123479840"} }
+  else
+    self.data = json.load(data)
+  end
   self.cache = cache
   if self.cache:sub(#self.cache) ~= "/" then
     self.cache = self.cache.."/"
@@ -103,6 +107,7 @@ function Loader.create(data, cache, width, height)
   end
 
   self.i = 1
+  self.shuffle = torch.randperm(#self.data)
 
   return self
 end
@@ -111,11 +116,21 @@ function Loader:numClasses()
   return #self.klasses + 1
 end
 
+function Loader:klassName(klassIdx)
+  local name = self.klasses[klassIdx]
+  if name ~= nil then
+    return name
+  end
+
+  return "unknown"
+end
+
 function Loader:get()
-  local i = self.i
+  local i = self.shuffle[self.i]
   self.i = self.i + 1
-  if i > #self.data then
+  if self.i > self.shuffle:size()[1] then
     self.i = 1
+    self.shuffle = torch.randperm(#self.data)
     return self:get()
   end
 
@@ -125,11 +140,7 @@ function Loader:get()
   local _, err = pcall(function() imgT = torch.load(fname) end)
   if err ~= nil then
     local img = gm.Image(self.data[i]["url"])
-    img:size(self.width, self.height)
-    imgT = img:toTensor()
-    imgT = imgT:transpose(1,3) -- make the color channel the first dimension
-    imgT = imgT:double()
-
+    imgT = self:process(img)
     torch.save(fname, imgT)
   end
 
@@ -147,14 +158,36 @@ end
 --  if r > 0.5 then
 --    local input = torch.ones(3, self.width, self.height)
 --    local a = torch.uniform(-0.1, 0.1)
---    input:mul(1 + a)
+--    input:mul(-1 + a)
 --    return input, 2
 --  else
 --    local input = torch.ones(3, self.width, self.height)
 --    local a = torch.uniform(-0.1, 0.1)
---    input:mul(a)
+--    input:mul(1 + a)
 --    return input, 1
 --  end
 --end
+
+-- process takes a graphicsmagick.Image, processes it, and transforms it into a torch.Tensor.
+function Loader:process(img)
+  local _, err = pcall(function() img:size(self.width, self.height) end)
+  if err ~= nil then
+    return torch.zeros(3, self.width, self.height), err
+  end
+
+  local imgT = img:toTensor()
+  imgT = imgT:transpose(1,3) -- make the color channel the first dimension
+  imgT = imgT:float()
+
+  -- normalize using the mean and variance calculated from 1000 training images.
+  local mean = {181.40322916667, 170.12656519608, 167.27086446078}
+  local std = {81.145678478329, 81.676893603989, 82.498848024362}
+  for cn = 1,3 do
+    imgT[{ cn, {}, {} }]:add(-mean[cn])
+    imgT[{ cn, {}, {} }]:div(std[cn])
+  end
+
+  return imgT, nil
+end
 
 return Loader
