@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+#file-input {
+  font-size: xx-large;
+}
+
+#submit-btn {
+  font-size: xx-large;
+}
+
+#bg-img {
+  border-style: dashed;
+  border-color: black;
+  border-width: 5px;
+}
+    </style>
+  </head>
+
+  <body>
+    <form action="/Predict" method="POST" enctype="multipart/form-data" id="predict-form">
+      <input type="file" name="f" id="file-input">
+      <button type="submit" id="submit-btn">Predict!</button>
+    </form>
+    <div id="bg">
+      <h2 id="bg-header">Predicted background</h2>
+      <div id="bg-img"></div>
+    </div>
+    <div id="input-div">
+      <img id="input-img"></img>
+    </div>
+
+    <script type="text/javascript">
+var form = document.querySelector("#predict-form");
+form.addEventListener("submit", function(e){
+  e.preventDefault();
+  var submitBtn = document.querySelector("#submit-btn");
+  var bgHeader = document.querySelector("#bg-header");
+  var req = new XMLHttpRequest();
+  req.responseType = "blob";
+  req.addEventListener("load", function(e){
+    if (e.target.status != 200) {
+      var reader = new FileReader();
+      reader.addEventListener("loadend", function(e){
+        alert(e.target.result);
+      });
+      reader.readAsText(e.target.response);
+      return;
+    }
+    var blob = e.target.response;
+    var img = document.querySelector("#bg-img");
+    URL.revokeObjectURL(img.bgImg);
+    img.bgImg = URL.createObjectURL(blob);
+    img.style["background-image"] = "url("+img.bgImg+")";
+
+    // Detect background image size
+    var dummy = document.createElement("img");
+    dummy.src = img.bgImg;
+    dummy.addEventListener("load", function(e){
+      img.style.height = Math.max(dummy.height, 50) + "px";
+    });
+  });
+  req.addEventListener("error", function(e){
+    console.log(e);
+  });
+  req.addEventListener("loadend", function(e){
+    submitBtn.disabled = false;
+    bgHeader.innerHTML = "Predicted background";
+  });
+  req.open("POST", "/Predict");
+  var fd = new FormData(form);
+  req.send(fd);
+  submitBtn.disabled = true;
+  bgHeader.innerHTML = "predicting...";
+});
+
+var fileInput = document.querySelector("#file-input");
+fileInput.addEventListener("change", function(e){
+  var f = e.target.files[0];
+  var reader = new FileReader();
+  reader.addEventListener("load", function(e){
+    var img = document.querySelector("#input-img");
+    img.src = e.target.result;
+  });
+  reader.readAsDataURL(f);
+});
+    </script>
+  </body>
+</html>

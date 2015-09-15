@@ -1,0 +1,159 @@
+local stringy = require "stringy"
+
+local MultipartData = {}
+MultipartData.__index = MultipartData
+
+setmetatable(MultipartData, {
+  __call = function (cls, ...)
+    return cls.new(...)
+  end,
+})
+
+local function is_header(value)
+  return string.match(value, "(%S+):%s*(%S+)")
+end
+
+local function table_size(t)
+  local res = 0
+  if t then
+    for _,_ in pairs(t) do
+      res = res + 1
+    end
+  end
+  return res
+end
+
+-- Create a table representation of multipart/data body
+--
+-- @param {string} body The multipart/data string body
+-- @param {string} boundary The multipart/data boundary
+-- @return {table} Lua representation of the body
+local function decode(body, boundary)
+  local result = {
+    data = {},
+    indexes = {}
+  }
+
+  local part_headers = {}
+  local part_index = 1
+  local part_name, part_value
+
+  local formDataState = ""
+
+  --for line in body:gmatch("[^\r\n]+") do
+  local lines = string.split(body, "\r\n")
+  for i = 1,#lines do
+    -- We garbage collect here because the below logic is memory intensive.
+    -- When running this function along with a huge torch model, LuaJIT might crash with out of memory.
+    collectgarbage()
+
+    local line = lines[i]
+    if stringy.startswith(line, "--"..boundary) then
+      if part_name ~= nil then
+        result.data[part_index] = {
+          name = part_name,
+          headers = part_headers,
+          value = part_value
+        }
+
+        result.indexes[part_name] = part_index
+
+        -- Reset fields for the next part
+        part_headers = {}
+        part_value = nil
+        part_name = nil
+        part_index = part_index + 1
+      end
+      formDataState = "headers"
+    elseif stringy.startswith(string.lower(line), "content-disposition") then --Beginning of part
+      -- Extract part_name
+      local parts = stringy.split(line, ";")
+      for _,v in ipairs(parts) do
+        if not is_header(v) then -- If it's not content disposition part
+          local current_parts = stringy.split(stringy.strip(v), "=")
+          if string.lower(table.remove(current_parts, 1)) == "name" then
+             local current_value = stringy.strip(table.remove(current_parts, 1))
+             part_name = string.sub(current_value, 2, string.len(current_value) - 1)
+          end
+        end
+      end
+      table.insert(part_headers, line)
+    else
+      if is_header(line) and formDataState == "headers" then
+        table.insert(part_headers, line)
+      else
+        -- The value part begins
+        if formDataState == "headers" then
+          formDataState = "body"
+        else
+          part_value = (part_value and part_value.."\r\n" or "")..line
+        end
+      end
+    end
+  end
+  return result
+end
+
+-- Creates a multipart/data body from a table
+--
+-- @param {table} t The table that contains the multipart/data body properties
+-- @param {boundary} boundary The multipart/data boundary to use
+-- @return {string} The multipart/data string body
+local function encode(t, boundary)
+  local result = ""
+
+  for _, v in ipairs(t.data) do
+    if v.value then
+      local part = "--"..boundary.."\r\n"
+      for _, header in ipairs(v.headers) do
+        part = part..header.."\r\n"
+      end
+      result = result..part.."\r\n"..v.value.."\r\n"
+    end
+  end
+  result = result.."--"..boundary.."--"
+
+  return result
+end
+
+function MultipartData.new(data, content_type)
+  local instance = {}
+  setmetatable(instance, MultipartData)
+
+  if content_type == nil then
+    instance._boundary = ""
+  else
+    instance._boundary = string.match(content_type, ";%s+boundary=(%S+)")
+    if instance._boundary == nil then
+      instance._boundary = ""
+    end
+  end
+
+  instance._data = decode(data, instance._boundary)
+  return instance
+end
+
+function MultipartData:get(name)
+  return self._data.data[self._data.indexes[name]]
+end
+
+function MultipartData:set_simple(name, value)
+  self._data.data[table_size(self._data.indexes) + 1] = {
+    name = name,
+    value = value,
+    headers = { "Content-Disposition: form-data; name=\""..name.."\"" }
+  }
+end
+
+function MultipartData:delete(name)
+  if self._data.indexes[name] then
+    self._data.data[self._data.indexes[name]].value = nil
+  end
+end
+
+function MultipartData:tostring()
+  return encode(self._data, self._boundary)
+end
+
+return MultipartData
+
