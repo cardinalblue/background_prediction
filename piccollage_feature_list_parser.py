@@ -28,8 +28,8 @@ def queryData(offset):
 			})
 	return result
 
-start = 4000
-step = 10
+start = 6200
+step = 40
 output = []
 f = open("data/lm_bg_{0}_{1}.json".format(start, start + (limit * step)), 'w')
 for i in range(step):

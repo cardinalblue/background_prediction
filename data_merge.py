@@ -37,6 +37,6 @@ for d in dict:
 	print d + " (" + str(dict[d]) + ")"
 
 # output the result
-output = open('merged_feature_feed.json', 'w')
-output.write(json.dumps(list))
+# output = open('merged_feature_feed.json', 'w')
+# output.write(json.dumps(list))
 

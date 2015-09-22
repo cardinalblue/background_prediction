@@ -22,6 +22,7 @@ function conv(numInPlanes, numOutPlanes, input)
 end
 
 local input = nn.Identity()()
+
 local numFilters1 = 32
 local conv1_1, conv1_2, pool1 = conv(3, numFilters1, input)
 
@@ -97,6 +98,7 @@ for i = 1,1000000 do
   local _, loss = optim.adagrad(feval, params, optimState)
 
   if i % 10 == 0 then
+<<<<<<< Updated upstream
     local t = os.date("*t")
     local ds = ("%04d-%02d-%02d %02d:%02d:%02d"):format(t.year, t.month, t.day, t.hour, t.min, t.sec)
     print(string.format("%s iteration %d, loss %f", ds, i, loss[1]))
@@ -105,6 +107,11 @@ for i = 1,1000000 do
   if i % 500 == 0 then
     torch.save("net.t7", model)
     torch.save("adagrad.t7", optimState.paramVariance)
+=======
+    collectgarbage()
+    local net = {width = width, height = height, model = model}
+    torch.save(string.format("net_%d_%f.t7", i, loss[1]), net)
+>>>>>>> Stashed changes
     print("saved!")
   end
 end
